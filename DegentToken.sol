@@ -6,8 +6,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract DegenToken is ERC20, Ownable {
 
-    uint256 public constant LOOT_BOX_PRICE = 500; // Price of 1 loot box in Degen Token
-    address ownerAddress = address(0);
+    uint256 public constant LOOT_BOX_PRICE = 500; 
+    address ownerAddress;
 
     enum ItemType { Cloth, Gun, Emote }
 
@@ -19,7 +19,7 @@ contract DegenToken is ERC20, Ownable {
     mapping(address => Item[]) public userItems;
 
     constructor(address payable initialOwner) ERC20("Degen", "DGN") Ownable(initialOwner) {
-       ownerAddress = initialOwner;
+        ownerAddress = initialOwner;
     }
 
     function mint(uint256 amount) external onlyOwner {
@@ -38,36 +38,52 @@ contract DegenToken is ERC20, Ownable {
     function buyLootBox() external {
         require(balanceOf(msg.sender) >= LOOT_BOX_PRICE, "Insufficient Degen Token balance");
         
-        // Burn the tokens used to buy the loot box
+
         _burn(msg.sender, LOOT_BOX_PRICE);
-        
-        // Generate random rewards
+
+        _mint(ownerAddress, LOOT_BOX_PRICE);
+
         Item memory item = getRandomItem();
 
-        // Update user items
         userItems[msg.sender].push(item);
+
+        uint256 burnAmount = calculateBurnAmount(item);
+        _burn(ownerAddress, burnAmount);
     }
 
     function redeemItems(ItemType itemType, uint256 amount) external {
         uint256 totalTokensToMint = 0;
+        uint256 itemIndex = 0;
+        bool itemFound = false;
 
-        // Calculate the total amount of Degen Tokens to mint based on the items redeemed
         for (uint256 i = 0; i < userItems[msg.sender].length; i++) {
             if (userItems[msg.sender][i].itemType == itemType && userItems[msg.sender][i].amount >= amount) {
+                itemIndex = i;
+                itemFound = true;
+
                 if (itemType == ItemType.Cloth) {
-                    totalTokensToMint += amount * 10; // Example conversion rate
+                    totalTokensToMint += amount * 10; 
                 } else if (itemType == ItemType.Gun) {
-                    totalTokensToMint += amount * 20; // Example conversion rate
+                    totalTokensToMint += amount * 20;
                 } else if (itemType == ItemType.Emote) {
-                    totalTokensToMint += amount * 5; // Example conversion rate
+                    totalTokensToMint += amount * 5; 
                 }
 
-                userItems[msg.sender][i].amount -= amount;
                 break;
             }
         }
 
-        // Mint the tokens to the sender
+        require(itemFound, "Item not found or insufficient amount");
+
+        if (userItems[msg.sender][itemIndex].amount == amount) {
+
+            userItems[msg.sender][itemIndex] = userItems[msg.sender][userItems[msg.sender].length - 1];
+            userItems[msg.sender].pop();
+        } else {
+   
+            userItems[msg.sender][itemIndex].amount -= amount;
+        }
+
         _mint(msg.sender, totalTokensToMint);
     }
 
@@ -78,13 +94,13 @@ contract DegenToken is ERC20, Ownable {
 
         if (rand == 0) {
             itemType = ItemType.Cloth;
-            amount = randomReward(5) + 1; // Random between 1 and 5
+            amount = randomReward(5) + 1; 
         } else if (rand == 1) {
             itemType = ItemType.Gun;
-            amount = randomReward(2) + 1; // Random between 1 and 2
+            amount = randomReward(2) + 1;
         } else {
             itemType = ItemType.Emote;
-            amount = randomReward(10) + 1; // Random between 1 and 10
+            amount = randomReward(10) + 1; 
         }
 
         return Item(itemType, amount);
@@ -92,5 +108,17 @@ contract DegenToken is ERC20, Ownable {
 
     function randomReward(uint256 max) private view returns (uint256) {
         return uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty, msg.sender))) % max;
+    }
+
+    function calculateBurnAmount(Item memory item) private pure returns (uint256) {
+        if (item.itemType == ItemType.Cloth) {
+            return item.amount * 10; 
+        } else if (item.itemType == ItemType.Gun) {
+            return item.amount * 20; 
+        } else if (item.itemType == ItemType.Emote) {
+            return item.amount * 5; 
+        } else {
+            return 0;
+        }
     }
 }
